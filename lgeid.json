@@ -1,0 +1,281 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01-preview/deploymentTemplate.json",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"vmSSName": {
+			"type": "string",
+			"metadata": {
+				"description": "The Name of the VM Scale Set"
+			}
+		},
+		"instanceCount": {
+			"type": "int",
+			"metadata": {
+				"description": "Number of VM instances to create in the scale set"
+			}
+		},
+		"vmSize": {
+			"type": "string",      "defaultValue": "Standard_A1_v2",
+      "allowedValues": [
+        "Standard_A1_v2",
+        "Standard_A2m_v2",
+        "Standard_A2_v2",
+        "Standard_A4m_v2",
+        "Standard_A4_v2",
+        "Standard_A8m_v2",
+        "Standard_A8_v2",
+        "Standard_D1_v2",
+        "Standard_D2_v2",
+        "Standard_D3_v2",
+        "Standard_D4_v2",
+        "Standard_D5_v2",
+        "Standard_D11_v2",
+        "Standard_D12_v2",
+        "Standard_D13_v2",
+        "Standard_D14_v2",
+        "Standard_D15_v2",
+        "Standard_F1",
+        "Standard_F2",
+        "Standard_F4",
+        "Standard_F8",
+        "Standard_F16",
+        "Standard_A0",
+        "Standard_A1",
+        "Standard_A2",
+        "Standard_A3",
+        "Standard_A5",
+        "Standard_A4",
+        "Standard_A6",
+        "Standard_A7",
+        "Basic_A0",
+        "Basic_A1",
+        "Basic_A2",
+        "Basic_A3",
+        "Basic_A4"
+			],
+			"metadata": {
+				"description": "The size of the VM instances Created"
+			}
+		},
+		
+		"adminUsername": {
+			"type": "string",
+			"metadata": {
+				"description": "The Username of the administrative user for each VM instance created"
+			}
+		},
+		"adminPassword": {
+			"type": "securestring",
+			"metadata": {
+				"description": "The Password of the administrative user for each VM instance created"
+			}
+		},
+		"sourceImageVhdUri": {
+			"type": "string",
+			"metadata": {
+				"description": "The source of the blob containing the custom image"
+			}
+		},
+		"vnetName":{
+			"type":"string"},
+		"subnetName":{"type":"string"},
+		"vnetResourceGroup":{
+			"type":"string"}
+		
+		
+	},
+	"variables": {
+		"addressPrefix": "10.0.0.0/16",
+		"subnetName": "Subnet",
+		"subnetPrefix": "10.0.0.0/24",
+		"virtualNetworkName": "vmssvnet",
+		"vnetID": "[resourceId('Microsoft.Network/virtualNetworks',variables('virtualNetworkName'))]",
+		"subnetRef": "[concat(variables('vnetID'),'/subnets/',variables('subnetName'))]",
+		"publicIPAddressName": "publicip1",
+		
+		"nicName": "networkInterface1",
+		"nicId": "[resourceId('Microsoft.Network/networkInterfaces',variables('nicName'))]",
+		"lbName": "loadBalancer1",
+		"lbID": "[resourceId('Microsoft.Network/loadBalancers',variables('lbName'))]",
+		"lbFEName": "loadBalancerFrontEnd",
+		"lbWebProbeName": "loadBalancerWebProbe",
+		"lbBEAddressPool": "loadBalancerBEAddressPool",
+		"lbFEIPConfigID": "[concat(variables('lbID'),'/frontendIPConfigurations/',variables('lbFEName'))]",
+		"lbBEAddressPoolID": "[concat(variables('lbID'),'/backendAddressPools/',variables('lbBEAddressPool'))]",
+		"lbWebProbeID": "[concat(variables('lbID'),'/probes/',variables('lbWebProbeName'))]",
+        "networkApi": "2016-03-30",
+        "computeApi": "2016-03-30"
+	},
+  "resources": [
+    {
+      "type": "Microsoft.Network/publicIPAddresses",
+      "name": "[concat(resourcegroup().name,parameters('vmssname'))]",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2015-06-15",
+      "tags": {
+        "displayName": "PublicIP"
+      },
+
+      "properties": {
+        "publicIPAllocationMethod": "Static",
+        "dnsSettings": {
+          "domainNameLabel": "[concat(resourceGroup().name,parameters('vmssname'))]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Network/loadBalancers",
+      "name": "[concat(resourceGroup().name,parameters('vmssname'))]",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2015-06-15",
+      "tags": {
+        "displayName": "LoadBalancer"
+      },
+      "dependsOn": [
+        "[concat('Microsoft.Network/publicIPAddresses/',concat(resourcegroup().name,parameters('vmssname')))]"
+      ],
+
+      "properties": {
+        "frontendIPConfigurations": [
+          {
+            "name": "LoadBalancerFrontEnd",
+            "properties": {
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses',concat(resourcegroup().name,parameters('vmssname')))]"
+              }
+            }
+          }
+        ],
+        "backendAddressPools": [
+          {
+            "name": "bepool"
+          }
+        ],
+        "inboundNatPools": [
+          {
+            "name": "natRDPpool",
+            "properties": {
+              "frontendIPConfiguration": {
+                "id": "[concat(resourceId('Microsoft.Network/loadBalancers',concat(resourcegroup().name,parameters('vmssname'))),'/frontendIPConfigurations/loadBalancerFrontEnd')]"
+              },
+              "protocol": "tcp",
+              "frontendPortRangeStart": 50000,
+              "frontendPortRangeEnd": 50499,
+              "backendPort": 3389
+            }
+          },
+          {
+            "name": "natWEBpool",
+            "properties": {
+              "frontendIPConfiguration": {
+                "id": "[concat(resourceId('Microsoft.Network/loadBalancers',concat(resourcegroup().name,parameters('vmssname'))),'/frontendIPConfigurations/loadBalancerFrontEnd')]"
+              },
+              "protocol": "tcp",
+              "frontendPortRangeStart": 8080,
+              "frontendPortRangeEnd": 8800,
+              "backendPort": 8080
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachineScaleSets",
+      "apiVersion": "[variables('computeApi')]",
+      "name": "[parameters('vmSSName')]",
+      "location": "[resourceGroup().location]",
+      "sku": {
+        "name": "[parameters('vmSize')]",
+        "tier": "Standard",
+        "capacity": "[parameters('instanceCount')]"
+      },
+      "dependsOn": [
+        "[concat('Microsoft.Network/loadBalancers/',concat(resourcegroup().name,parameters('vmssname')))]"
+        
+      ],
+      "properties": {
+        "overprovision": "false",
+        "upgradePolicy": {
+          "mode": "Manual"
+        },
+        "virtualMachineProfile": {
+          "storageProfile": {
+            "osDisk": {
+              "name": "vmssosdisk",
+              "caching": "ReadOnly",
+              "createOption": "FromImage",
+              "osType": "Windows",
+              "image": {
+                "uri": "[parameters('sourceImageVhdUri')]"
+              }
+            }
+          },
+          "osProfile": {
+            "computerNamePrefix": "[parameters('vmSSName')]",
+            "adminUsername": "[parameters('adminUsername')]",
+            "adminPassword": "[parameters('adminPassword')]"
+          },
+          "networkProfile": {
+            "networkInterfaceConfigurations": [
+              {
+                "name": "nic1",
+                "properties": {
+                  "primary": "true",
+                  "ipConfigurations": [
+                    {
+                      "name": "ip1",
+                      "properties": {
+                        "subnet": {
+                          "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', parameters('vnetResourceGroup'), '/providers/Microsoft.Network/virtualNetworks/', parameters('vnetname'), '/subnets/', parameters('subnetname'))]"
+                        },
+                        "loadBalancerBackendAddressPools": [
+                          {
+                            "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/loadBalancers/', concat(resourcegroup().name,parameters('vmssname')), '/backendAddressPools/', 'bepool')]"
+                          }
+                        ],
+                        "loadBalancerInboundNatPools": [
+                          {
+                            "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/loadBalancers/', concat(resourcegroup().name,parameters('vmssname')), '/inboundNatPools/', 'natRDPpool')]"
+                          },
+                          {
+                            "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Network/loadBalancers/', concat(resourcegroup().name,parameters('vmssname')), '/inboundNatPools/', 'natWEBpool')]"
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+                    "extensionProfile": {
+                        "extensions": [
+                            {
+                                "name": "customScript",
+                                "properties": {
+                                    "publisher": "Microsoft.Compute",
+                                    "settings": {
+                                        "fileUris": [
+                                            "https://raw.githubusercontent.com/xlegend1024/AZ-VMSS-WIN-CUSTSCREXT/master/InstAgent.ps1"
+                                        ]
+                                    },
+                                    "typeHandlerVersion": "1.8",
+                                    "autoUpgradeMinorVersion": true,
+                                    "protectedSettings": {
+                                        "commandToExecute": "powershell -ExecutionPolicy Unrestricted -File InstAgent.ps1"
+                                    },
+                                    "type": "CustomScriptExtension"
+                                }
+                            }
+                        ]
+                    }
+
+        }
+      }
+    }
+  ],
+	"outputs": {
+		
+	}
+}
+
